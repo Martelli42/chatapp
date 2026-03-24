@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #e5ddd5; height: 100dvh; display: flex; flex-direction: column; }
+
+    /* AUTH */
+    #auth-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100dvh; background: #075e54; padding: 20px;
+    }
+    #auth-screen h1 { color: white; font-size: 28px; margin-bottom: 30px; }
+    .auth-box {
+      background: white; border-radius: 12px; padding: 28px 24px;
+      width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .auth-box h2 { margin-bottom: 20px; color: #075e54; font-size: 20px; }
+    .auth-box input {
+      width: 100%; padding: 12px 14px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 16px; margin-bottom: 14px; outline: none; transition: border 0.2s;
+    }
+    .auth-box input:focus { border-color: #25d366; }
+    .auth-box button {
+      width: 100%; padding: 13px; background: #25d366; color: white; border: none;
+      border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+    }
+    .auth-box button:hover { background: #1da851; }
+    .auth-switch { margin-top: 16px; text-align: center; font-size: 14px; color: #666; }
+    .auth-switch a { color: #075e54; font-weight: 600; cursor: pointer; }
+    .error-msg { background: #ffe0e0; color: #c0392b; padding: 10px 12px; border-radius: 6px; font-size: 14px; margin-bottom: 12px; display: none; }
+
+    /* CHAT */
+    #chat-screen { display: none; flex-direction: column; height: 100dvh; }
+
+    /* Header */
+    .chat-header {
+      background: #075e54; color: white; padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2); flex-shrink: 0;
+    }
+    .chat-header-left { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+      width: 40px; height: 40px; border-radius: 50%; background: #25d366;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;
+    }
+    .header-info .room-name { font-weight: 700; font-size: 16px; }
+    .header-info .your-name { font-size: 13px; opacity: 0.85; }
+    .header-actions { display: flex; gap: 8px; }
+    .icon-btn {
+      background: none; border: none; color: white; cursor: pointer;
+      padding: 6px; border-radius: 50%; font-size: 20px; line-height: 1;
+      transition: background 0.2s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.15); }
+
+    /* Messages */
+    #messages {
+      flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .msg-wrapper { display: flex; flex-direction: column; max-width: 75%; }
+    .msg-wrapper.mine { align-self: flex-end; align-items: flex-end; }
+    .msg-wrapper.theirs { align-self: flex-start; align-items: flex-start; }
+    .bubble {
+      padding: 8px 12px; border-radius: 10px; font-size: 15px; line-height: 1.4;
+      word-break: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .mine .bubble { background: #dcf8c6; border-bottom-right-radius: 3px; }
+    .theirs .bubble { background: white; border-bottom-left-radius: 3px; }
+    .bubble .sender { font-size: 12px; font-weight: 700; color: #075e54; margin-bottom: 3px; display: block; }
+    .bubble .time { font-size: 11px; color: #999; margin-top: 4px; text-align: right; }
+
+    /* Input */
+    .chat-input-area {
+      background: #f0f0f0; padding: 8px 10px;
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
+    #msg-input {
+      flex: 1; padding: 11px 16px; border: none; border-radius: 24px;
+      font-size: 15px; outline: none; background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    #send-btn {
+      width: 46px; height: 46px; border-radius: 50%; background: #075e54; color: white;
+      border: none; cursor: pointer; font-size: 20px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0; transition: background 0.2s;
+    }
+    #send-btn:hover { background: #054d44; }
+
+    /* Change name modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center; z-index: 100; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; padding: 24px;
+      width: 100%; max-width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    .modal h3 { margin-bottom: 16px; color: #075e54; }
+    .modal input {
+      width: 100%; padding: 11px 13px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 15px; margin-bottom: 14px; outline: none;
+    }
+    .modal input:focus { border-color: #25d366; }
+    .modal-actions { display: flex; gap: 10px; }
+    .modal-actions button {
+      flex: 1; padding: 11px; border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-cancel { background: #eee; color: #333; }
+    .btn-save { background: #25d366; color: white; }
+    .btn-save:hover { background: #1da851; }
+
+    @media (max-width: 480px) {
+      .msg-wrapper { max-width: 88%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <h1>💬 ChatRoom</h1>
+
+  <!-- LOGIN -->
+  <div class="auth-box" id="login-box">
+    <h2>Sign in</h2>
+    <div class="error-msg" id="login-error"></div>
+    <input type="text" id="login-username" placeholder="Username" autocomplete="username" />
+    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" />
+    <button onclick="doLogin()">Sign In</button>
+    <div class="auth-switch">No account? <a onclick="showRegister()">Create one</a></div>
+  </div>
+
+  <!-- REGISTER -->
+  <div class="auth-box" id="register-box" style="display:none">
+    <h2>Create account</h2>
+    <div class="error-msg" id="register-error"></div>
+    <input type="text" id="reg-username" placeholder="Username (for login)" autocomplete="username" />
+    <input type="password" id="reg-password" placeholder="Password" autocomplete="new-password" />
+    <input type="text" id="reg-displayname" placeholder="Your display name (shown in chat)" />
+    <button onclick="doRegister()">Create Account</button>
+    <div class="auth-switch">Already have an account? <a onclick="showLogin()">Sign in</a></div>
+  </div>
+</div>
+
+<!-- CHAT SCREEN -->
+<div id="chat-screen">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="avatar" id="header-avatar">?</div>
+      <div class="header-info">
+        <div class="room-name">Everyone</div>
+        <div class="your-name" id="header-name">...</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="openNameModal()" title="Change display name">✏️</button>
+      <button class="icon-btn" onclick="doLogout()" title="Log out">🚪</button>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+
+  <div class="chat-input-area">
+    <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off" />
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<!-- CHANGE NAME MODAL -->
+<div class="modal-overlay" id="name-modal">
+  <div class="modal">
+    <h3>Change display name</h3>
+    <input type="text" id="new-name-input" placeholder="New display name" />
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeNameModal()">Cancel</button>
+      <button class="btn-save" onclick="saveName()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  let token = localStorage.getItem('token');
+  let displayName = localStorage.getItem('display_name') || '';
+  let socket;
+
+  // On load
+  if (token) initChat();
+
+  function showRegister() {
+    document.getElementById('login-box').style.display = 'none';
+    document.getElementById('register-box').style.display = 'block';
+  }
+  function showLogin() {
+    document.getElementById('register-box').style.display = 'none';
+    document.getElementById('login-box').style.display = 'block';
+  }
+
+  async function doRegister() {
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const display_name = document.getElementById('reg-displayname').value.trim();
+    const errEl = document.getElementById('register-error');
+    errEl.style.display = 'none';
+
+    if (!username || !password || !display_name) {
+      errEl.textContent = 'All fields are required.';
+      errEl.style.display = 'block'; return;
+    }
+    const res = await fetch('/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, display_name })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    token = data.token; displayName = data.display_name;
+    localStorage.setItem('token', token);
+    localStorage.setItem('display_name', displayName);
+    initChat();
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    token = data.token; displayName = data.display_name;
+    localStorage.setItem('token', token);
+    localStorage.setItem('display_name', displayName);
+    initChat();
+  }
+
+  function doLogout() {
+    localStorage.clear(); token = null; displayName = '';
+    if (socket) socket.disconnect();
+    document.getElementById('chat-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    showLogin();
+  }
+
+  async function initChat() {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('chat-screen').style.display = 'flex';
+    updateHeader();
+
+    // Load history
+    const res = await fetch('/api/messages');
+    const msgs = await res.json();
+    msgs.forEach(m => appendMessage(m.display_name, m.text, m.created_at, false));
+    scrollToBottom();
+
+    // Connect socket
+    socket = io({ auth: { token } });
+
+    socket.on('message', (msg) => {
+      appendMessage(msg.display_name, msg.text, msg.created_at, true);
+    });
+
+    socket.on('connect_error', () => doLogout());
+  }
+
+  function updateHeader() {
+    const name = displayName || '?';
+    document.getElementById('header-name').textContent = name;
+    document.getElementById('header-avatar').textContent = name.charAt(0).toUpperCase();
+  }
+
+  function appendMessage(sender, text, time, animate) {
+    const isMine = sender === displayName;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper ' + (isMine ? 'mine' : 'theirs');
+    if (animate) wrapper.style.opacity = '0';
+
+    const t = new Date(time);
+    const timeStr = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    wrapper.innerHTML = `
+      <div class="bubble">
+        ${!isMine ? `<span class="sender">${escHtml(sender)}</span>` : ''}
+        ${escHtml(text)}
+        <div class="time">${timeStr}</div>
+      </div>`;
+
+    document.getElementById('messages').appendChild(wrapper);
+    if (animate) {
+      requestAnimationFrame(() => {
+        wrapper.style.transition = 'opacity 0.2s';
+        wrapper.style.opacity = '1';
+      });
+      scrollToBottom();
+    }
+  }
+
+  function scrollToBottom() {
+    const el = document.getElementById('messages');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text || !socket) return;
+    socket.emit('message', text);
+    input.value = '';
+    input.focus();
+  }
+
+  document.getElementById('msg-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // Change name
+  function openNameModal() {
+    document.getElementById('new-name-input').value = displayName;
+    document.getElementById('name-modal').classList.add('open');
+    setTimeout(() => document.getElementById('new-name-input').focus(), 100);
+  }
+  function closeNameModal() {
+    document.getElementById('name-modal').classList.remove('open');
+  }
+  async function saveName() {
+    const newName = document.getElementById('new-name-input').value.trim();
+    if (!newName) return;
+    const res = await fetch('/api/update-name', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': token },
+      body: JSON.stringify({ display_name: newName })
+    });
+    if (res.ok) {
+      displayName = newName;
+      localStorage.setItem('display_name', displayName);
+      updateHeader();
+      if (socket) socket.emit('name-updated');
+      closeNameModal();
+    }
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
