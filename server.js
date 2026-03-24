@@ -1,8 +1,10 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const session = require('express-session');
 const path = require('path');
 const Database = require('better-sqlite3');
 
@@ -12,14 +14,16 @@ const io = new Server(server);
 
 const db = new Database('chat.db');
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey_changeme';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
-// Setup DB
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    display_name TEXT NOT NULL
+    google_id TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    email TEXT
   );
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,35 +35,46 @@ db.exec(`
 `);
 
 app.use(express.json());
+app.use(session({ secret: JWT_SECRET, resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Register
-app.post('/api/register', (req, res) => {
-  const { username, password, display_name } = req.body;
-  if (!username || !password || !display_name)
-    return res.status(400).json({ error: 'All fields required' });
-
-  const hash = bcrypt.hashSync(password, 10);
-  try {
-    const stmt = db.prepare('INSERT INTO users (username, password, display_name) VALUES (?, ?, ?)');
-    const result = stmt.run(username.trim().toLowerCase(), hash, display_name.trim());
-    const token = jwt.sign({ id: result.lastInsertRowid, username }, JWT_SECRET);
-    res.json({ token, display_name: display_name.trim() });
-  } catch (e) {
-    res.status(400).json({ error: 'Username already taken' });
+passport.use(new GoogleStrategy({
+  clientID: GOOGLE_CLIENT_ID,
+  clientSecret: GOOGLE_CLIENT_SECRET,
+  callbackURL: `${BASE_URL}/auth/google/callback`
+}, (accessToken, refreshToken, profile, done) => {
+  const email = profile.emails?.[0]?.value || '';
+  const googleName = profile.displayName || 'User';
+  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id);
+  let isNew = false;
+  if (!user) {
+    const result = db.prepare('INSERT INTO users (google_id, display_name, email) VALUES (?, ?, ?)').run(profile.id, googleName, email);
+    user = { id: result.lastInsertRowid, google_id: profile.id, display_name: googleName, email, isNew: true };
+    isNew = true;
   }
+  user.isNew = isNew;
+  return done(null, user);
+}));
+
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser((id, done) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  done(null, user);
 });
 
-// Login
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim().toLowerCase());
-  if (!user || !bcrypt.compareSync(password, user.password))
-    return res.status(401).json({ error: 'Invalid username or password' });
+// Google auth routes
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
-  res.json({ token, display_name: user.display_name });
-});
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/' }),
+  (req, res) => {
+    const user = req.user;
+    const token = jwt.sign({ id: user.id }, JWT_SECRET);
+    res.redirect(`/?token=${token}&name=${encodeURIComponent(user.display_name)}&new=${user.isNew ? '1' : '0'}`);
+  }
+);
 
 // Update display name
 app.post('/api/update-name', (req, res) => {
@@ -82,13 +97,12 @@ app.get('/api/messages', (req, res) => {
   res.json(msgs.reverse());
 });
 
-// Socket.io auth + chat
+// Socket.io
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     socket.userId = payload.id;
-    socket.username = payload.username;
     next();
   } catch {
     next(new Error('Unauthorized'));
@@ -97,7 +111,7 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const user = db.prepare('SELECT display_name FROM users WHERE id = ?').get(socket.userId);
-  socket.displayName = user?.display_name || socket.username;
+  socket.displayName = user?.display_name || 'Unknown';
 
   socket.on('message', (text) => {
     if (!text || typeof text !== 'string' || text.trim().length === 0) return;
