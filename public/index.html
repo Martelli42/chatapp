@@ -81,6 +81,23 @@
     .bubble .sender { font-size: 12px; font-weight: 700; color: #075e54; margin-bottom: 3px; display: block; }
     .bubble .time { font-size: 11px; color: #999; margin-top: 4px; text-align: right; }
 
+    /* Pet area */
+    #pet-area {
+      height: 64px; background: #d4f1d4; border-top: 1px solid #b2dfb2;
+      position: relative; overflow: hidden; flex-shrink: 0;
+    }
+    #pet-canvas { position: absolute; bottom: 4px; image-rendering: pixelated; }
+    #speech-bubble {
+      position: absolute; background: white; border: 2px solid #5C3D2E;
+      border-radius: 10px; padding: 4px 8px; font-size: 12px; font-weight: 600;
+      color: #333; white-space: nowrap; bottom: 40px; opacity: 0;
+      transition: opacity 0.3s; pointer-events: none;
+    }
+    #speech-bubble::after {
+      content: ''; position: absolute; bottom: -8px; left: 10px;
+      border: 4px solid transparent; border-top-color: #5C3D2E;
+    }
+
     .chat-input-area {
       background: #f0f0f0; padding: 8px 10px;
       display: flex; align-items: center; gap: 8px; flex-shrink: 0;
@@ -156,6 +173,13 @@
     </div>
   </div>
   <div id="messages"></div>
+
+  <!-- PET -->
+  <div id="pet-area">
+    <canvas id="pet-canvas" width="48" height="48"></canvas>
+    <div id="speech-bubble"></div>
+  </div>
+
   <div class="chat-input-area">
     <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off" />
     <button id="send-btn" onclick="sendMessage()">➤</button>
@@ -244,7 +268,10 @@
     scrollToBottom();
 
     socket = io({ auth: { token } });
-    socket.on('message', (msg) => appendMessage(msg.display_name, msg.text, msg.created_at, true));
+    socket.on('message', (msg) => {
+      appendMessage(msg.display_name, msg.text, msg.created_at, true);
+      if (window.petReact) window.petReact(msg.text);
+    });
     socket.on('connect_error', () => doLogout());
   }
 
@@ -318,6 +345,145 @@
   function escHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // ===================== PIXEL PET =====================
+  (function() {
+    const C = [null,'#FDE68A','#7C3F00','#111111','#FFB3BA'];
+    const HEAD = [
+      [0,0,2,2,2,2,2,2,0,0,0,0],
+      [0,2,1,1,1,1,1,1,2,0,0,0],
+      [2,1,1,3,1,1,1,4,1,2,0,0],
+      [2,1,1,1,1,1,1,1,1,2,0,0],
+      [2,1,1,1,2,2,1,1,1,2,0,0],
+      [0,2,2,2,2,2,2,2,2,2,0,0],
+    ];
+    const HEAD_REACT = [
+      [0,0,2,2,2,2,2,2,0,0,0,0],
+      [0,2,1,1,1,1,1,1,2,0,0,0],
+      [2,1,1,3,1,1,1,4,1,2,0,0],
+      [2,1,1,1,1,1,1,1,1,2,0,0],
+      [2,1,1,2,4,4,2,1,1,2,0,0],
+      [0,2,2,2,2,2,2,2,2,2,0,0],
+    ];
+    const BODY = [
+      [0,0,2,1,1,1,1,1,2,0,0,0],
+      [0,0,2,1,1,1,1,1,2,0,0,0],
+      [0,0,2,2,1,1,1,2,2,0,0,0],
+    ];
+    const LEGS_A = [
+      [0,0,0,2,1,0,0,2,1,0,0,0],
+      [0,0,0,2,2,0,0,2,2,0,0,0],
+    ];
+    const LEGS_B = [
+      [0,0,2,1,0,0,0,0,2,1,0,0],
+      [0,0,2,2,0,0,0,0,2,2,0,0],
+    ];
+
+    const canvas = document.getElementById('pet-canvas');
+    const ctx = canvas.getContext('2d');
+    const S = 3; // scale: 3px per pixel
+    const W = 12 * S, H = 11 * S;
+    canvas.width = W; canvas.height = H;
+
+    function drawFrame(rows, ox=0) {
+      ctx.clearRect(0, 0, W, H);
+      rows.forEach((row, y) => {
+        row.forEach((c, x) => {
+          if (!C[c]) return;
+          ctx.fillStyle = C[c];
+          ctx.fillRect((x+ox)*S, y*S, S, S);
+        });
+      });
+    }
+
+    function buildFrame(isReact, legsB) {
+      return [...(isReact ? HEAD_REACT : HEAD), ...BODY, ...(legsB ? LEGS_B : LEGS_A)];
+    }
+
+    const area = document.getElementById('pet-area');
+    const bubble = document.getElementById('speech-bubble');
+
+    let petX = 20;
+    let dir = 1; // 1=right, -1=left
+    let walkStep = false;
+    let isReacting = false;
+    let reactTimer = null;
+    let walkTimer = 0;
+    let lastTime = null;
+    const SPEED = 35; // px per second
+    const STEP_MS = 320; // leg swap interval
+
+    function tick(ts) {
+      if (!lastTime) lastTime = ts;
+      const dt = ts - lastTime;
+      lastTime = ts;
+
+      const areaW = area.offsetWidth;
+      petX += dir * SPEED * (dt / 1000);
+
+      if (petX + W > areaW - 10) { dir = -1; petX = areaW - W - 10; }
+      if (petX < 10) { dir = 1; petX = 10; }
+
+      walkTimer += dt;
+      if (walkTimer > STEP_MS) { walkStep = !walkStep; walkTimer = 0; }
+
+      // draw
+      const frame = buildFrame(isReacting, walkStep);
+      ctx.save();
+      if (dir === -1) {
+        ctx.translate(W, 0);
+        ctx.scale(-1, 1);
+      }
+      drawFrame(frame);
+      ctx.restore();
+
+      canvas.style.left = petX + 'px';
+
+      // bubble position
+      bubble.style.left = Math.min(petX, area.offsetWidth - bubble.offsetWidth - 10) + 'px';
+
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+
+    const reactions = {
+      laugh:    ['hehe~!', '*giggles*', 'haha xD', 'lol!!'],
+      love:     ['uwu~', '*melts*', 'so sweet!', '♥‿♥'],
+      food:     ['nom nom!', 'feed me too!', '*hungry*', 'yummy~'],
+      question: ['hmm...', '*thinks*', 'ooh good q!', 'idk lol'],
+      hype:     ['OMG!!', '*jumps*', 'YESS!', 'lets gooo!'],
+      long:     ['so many words!', '*overwhelmed*', 'owo that\'s long', 'tldr lol'],
+      short:    ['say more!', 'that\'s it?', '...ok', 'lol short'],
+      default:  ['owo', ':3', '*vibes*', '~♪', 'noted!', 'interesting~', 'hm hm', '*nods*', 'ok ok!', 'heyyy'],
+    };
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function getPetReaction(text) {
+      const t = text.toLowerCase();
+      if (t.match(/lol|haha|hehe|😂|🤣/)) return pick(reactions.laugh);
+      if (t.match(/love|❤|😍|💕|kiss/)) return pick(reactions.love);
+      if (t.match(/food|eat|pizza|burger|hungry|yum|🍕|🍔/)) return pick(reactions.food);
+      if (t.includes('?')) return pick(reactions.question);
+      if (t.match(/!!|omg|wow|amazing|awesome/)) return pick(reactions.hype);
+      if (text.length > 120) return pick(reactions.long);
+      if (text.length < 4) return pick(reactions.short);
+      return pick(reactions.default);
+    }
+
+    window.petReact = function(text) {
+      if (reactTimer) clearTimeout(reactTimer);
+      isReacting = true;
+      bubble.textContent = getPetReaction(text);
+      bubble.style.opacity = '1';
+      reactTimer = setTimeout(() => {
+        bubble.style.opacity = '0';
+        setTimeout(() => { isReacting = false; }, 300);
+      }, 2500);
+    };
+  })();
+  // ======================================================
 </script>
 </body>
 </html>
