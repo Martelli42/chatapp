@@ -88,14 +88,14 @@
     }
     #pet-canvas { position: absolute; bottom: 4px; image-rendering: pixelated; }
     #speech-bubble {
-      position: absolute; background: white; border: 2px solid #5C3D2E;
+      position: fixed; background: white; border: 2px solid #1565C0;
       border-radius: 10px; padding: 4px 8px; font-size: 12px; font-weight: 600;
-      color: #333; white-space: nowrap; bottom: 40px; opacity: 0;
+      color: #333; white-space: nowrap; opacity: 0;
       transition: opacity 0.3s; pointer-events: none; z-index: 1000;
     }
     #speech-bubble::after {
       content: ''; position: absolute; bottom: -8px; left: 10px;
-      border: 4px solid transparent; border-top-color: #5C3D2E;
+      border: 4px solid transparent; border-top-color: #1565C0;
     }
 
     .chat-input-area {
@@ -177,8 +177,8 @@
   <!-- PET -->
   <div id="pet-area">
     <canvas id="pet-canvas" width="48" height="48"></canvas>
-    <div id="speech-bubble"></div>
   </div>
+  <div id="speech-bubble"></div>
 
   <div class="chat-input-area">
     <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off" />
@@ -519,12 +519,11 @@
       if (hurtTimer) clearTimeout(hurtTimer);
       hurtTimer = setTimeout(() => {
         bubble.style.opacity = '0';
-        // return to walk
         canvas.style.position = 'absolute';
         canvas.style.top = '';
         canvas.style.left = petX + 'px';
         canvas.style.zIndex = '';
-        setTimeout(() => { mode = 'walk'; showBubble(pick(['im ok...','never again','u r mean','x_x → :3']),true); }, 300);
+        setTimeout(() => { mode = 'walk'; showBubble(pick(['im ok...','never again','u r mean','x_x → :3']), true); }, 300);
       }, 2000);
     }
 
@@ -544,14 +543,9 @@
         if (walkTimer > STEP_MS) { walkStep = !walkStep; walkTimer = 0; }
         drawSprite(isReacting ? SLIME_REACT : (walkStep ? SLIME_SQUISH : SLIME_IDLE));
         canvas.style.left = petX + 'px';
-        bubble.style.left = Math.min(petX, areaW - bubble.offsetWidth - 10) + 'px';
 
       } else if (mode === 'grabbed') {
         drawSprite(SLIME_GRABBED);
-        bubble.style.left = Math.min(screenX, window.innerWidth - bubble.offsetWidth - 10) + 'px';
-        bubble.style.bottom = '';
-        bubble.style.top = Math.max(0, screenY - 32) + 'px';
-        bubble.style.position = 'fixed';
 
       } else if (mode === 'falling') {
         velY += GRAVITY * dt;
@@ -568,18 +562,19 @@
         if (screenY >= landY) {
           screenY = landY;
           canvas.style.top = screenY + 'px';
-          bubble.style.position = '';
-          bubble.style.top = '';
-          bubble.style.bottom = '40px';
           const areaLeft = area.getBoundingClientRect().left;
           petX = Math.max(10, Math.min(screenX - areaLeft, areaW - W - 10));
-          bubble.style.left = Math.min(petX, areaW - bubble.offsetWidth - 10) + 'px';
           drawSprite(SLIME_HURT);
           triggerHurt();
         }
       } else if (mode === 'hurt') {
         drawSprite(SLIME_HURT);
       }
+
+      // Always pin bubble just above the canvas head
+      const cr = canvas.getBoundingClientRect();
+      bubble.style.left = Math.min(cr.left, window.innerWidth - bubble.offsetWidth - 8) + 'px';
+      bubble.style.top  = Math.max(4, cr.top - bubble.offsetHeight - 6) + 'px';
 
       requestAnimationFrame(tick);
     }
