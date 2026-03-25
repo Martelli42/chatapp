@@ -348,49 +348,76 @@
 
   // ===================== PIXEL PET =====================
   (function() {
-    const C = [null,'#FDE68A','#7C3F00','#111111','#FFB3BA'];
-    const S = 3;
-    const HEAD = [
-      [0,0,2,2,2,2,2,2,0,0,0,0],
-      [0,2,1,1,1,1,1,1,2,0,0,0],
-      [2,1,1,3,1,1,1,4,1,2,0,0],
-      [2,1,1,1,1,1,1,1,1,2,0,0],
-      [2,1,1,1,2,2,1,1,1,2,0,0],
-      [0,2,2,2,2,2,2,2,2,2,0,0],
+    // Blue slime palette
+    const C = [null,'#5BC8F5','#1565C0','#0D1B4B','#B3E5FC'];
+    const S = 4; // 4px per pixel
+
+    // Full 12x11 frames
+    const SLIME_IDLE = [
+      [0,0,0,2,2,2,2,2,2,0,0,0],
+      [0,0,2,1,1,1,1,1,1,2,0,0],
+      [0,2,1,4,4,1,1,1,1,1,2,0],
+      [0,2,1,1,1,3,1,3,1,1,2,0],
+      [0,2,1,1,1,1,1,1,1,1,2,0],
+      [0,2,1,1,2,1,1,2,1,1,2,0],
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [0,2,2,1,1,1,1,1,1,2,2,0],
+      [0,0,0,2,2,2,2,2,2,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
     ];
-    const HEAD_REACT = [
-      [0,0,2,2,2,2,2,2,0,0,0,0],
-      [0,2,1,1,1,1,1,1,2,0,0,0],
-      [2,1,1,3,1,1,1,4,1,2,0,0],
-      [2,1,1,1,1,1,1,1,1,2,0,0],
-      [2,1,1,2,4,4,2,1,1,2,0,0],
-      [0,2,2,2,2,2,2,2,2,2,0,0],
+    const SLIME_SQUISH = [ // bounce down — wider & flatter
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,2,2,2,2,2,2,2,2,0,0],
+      [0,2,1,4,4,1,1,1,1,1,2,0],
+      [2,1,1,1,1,3,1,3,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [2,1,1,1,2,1,1,2,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [0,2,2,1,1,1,1,1,1,2,2,0],
+      [0,0,0,2,2,2,2,2,2,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
     ];
-    const HEAD_HURT = [
-      [0,0,2,2,2,2,2,2,0,0,0,0],
-      [0,2,1,1,1,1,1,1,2,0,0,0],
-      [2,1,2,3,2,1,2,3,2,2,0,0],  // X eyes
-      [2,1,1,1,1,1,1,1,1,2,0,0],
-      [2,1,1,2,1,1,2,1,1,2,0,0],  // flat mouth
-      [0,2,2,2,2,2,2,2,2,2,0,0],
+    const SLIME_REACT = [
+      [0,0,0,2,2,2,2,2,2,0,0,0],
+      [0,0,2,1,1,1,1,1,1,2,0,0],
+      [0,2,1,4,4,1,1,1,1,1,2,0],
+      [0,2,1,1,1,3,1,3,1,1,2,0],
+      [0,2,1,1,1,1,1,1,1,1,2,0],
+      [0,2,1,1,2,4,4,2,1,1,2,0], // open mouth
+      [2,1,1,1,2,1,1,2,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [0,2,2,1,1,1,1,1,1,2,2,0],
+      [0,0,0,2,2,2,2,2,2,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
     ];
-    const HEAD_GRABBED = [
-      [0,0,2,2,2,2,2,2,0,0,0,0],
-      [0,2,1,1,1,1,1,1,2,0,0,0],
-      [2,1,1,4,1,1,1,4,1,2,0,0],  // O_O eyes (scared)
-      [2,1,1,1,1,1,1,1,1,2,0,0],
-      [2,1,1,1,2,2,1,1,1,2,0,0],
-      [0,2,2,2,2,2,2,2,2,2,0,0],
-    ];
-    const BODY = [
+    const SLIME_GRABBED = [ // stretched tall, scared O eyes
+      [0,0,0,2,2,2,2,2,0,0,0,0],
       [0,0,2,1,1,1,1,1,2,0,0,0],
-      [0,0,2,1,1,1,1,1,2,0,0,0],
-      [0,0,2,2,1,1,1,2,2,0,0,0],
+      [0,2,1,4,1,1,1,1,1,2,0,0],
+      [0,2,1,1,4,3,3,4,1,2,0,0], // big O eyes
+      [0,2,1,1,1,1,1,1,1,2,0,0],
+      [0,2,1,1,2,1,2,1,1,2,0,0], // worried mouth
+      [0,2,1,1,1,1,1,1,1,2,0,0],
+      [0,2,2,1,1,1,1,1,2,2,0,0],
+      [0,0,2,2,2,2,2,2,2,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
     ];
-    const LEGS_A = [[0,0,0,2,1,0,0,2,1,0,0,0],[0,0,0,2,2,0,0,2,2,0,0,0]];
-    const LEGS_B = [[0,0,2,1,0,0,0,0,2,1,0,0],[0,0,2,2,0,0,0,0,2,2,0,0]];
-    const LEGS_DANGLE = [[0,0,0,2,2,0,0,2,2,0,0,0],[0,0,0,0,2,2,2,2,0,0,0,0]];
-    const LEGS_SPLAT  = [[0,2,2,0,0,0,0,0,0,2,2,0],[2,2,0,0,0,0,0,0,0,0,2,2]];
+    const SLIME_HURT = [ // super flat splat, X eyes
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,2,2,2,2,2,2,2,2,2,2,0],
+      [2,1,1,4,1,1,1,1,1,1,1,2],
+      [2,1,2,3,2,1,1,2,3,2,1,2], // X X eyes
+      [2,1,1,1,1,2,2,1,1,1,1,2], // sad mouth
+      [2,1,1,1,1,1,1,1,1,1,1,2],
+      [0,2,2,2,2,2,2,2,2,2,2,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+    ];
 
     const canvas = document.getElementById('pet-canvas');
     const ctx = canvas.getContext('2d');
@@ -398,17 +425,13 @@
     canvas.width = W; canvas.height = H;
     canvas.style.cursor = 'grab';
 
-    function drawSprite(head, legs, flipX) {
-      const rows = [...head, ...BODY, ...legs];
+    function drawSprite(frame) {
       ctx.clearRect(0,0,W,H);
-      ctx.save();
-      if (flipX) { ctx.translate(W,0); ctx.scale(-1,1); }
-      rows.forEach((row,y) => row.forEach((c,x) => {
+      frame.forEach((row,y) => row.forEach((c,x) => {
         if (!C[c]) return;
         ctx.fillStyle = C[c];
         ctx.fillRect(x*S, y*S, S, S);
       }));
-      ctx.restore();
     }
 
     const area   = document.getElementById('pet-area');
@@ -519,12 +542,12 @@
         if (petX < 10) { dir = 1; petX = 10; }
         walkTimer += dt * 1000;
         if (walkTimer > STEP_MS) { walkStep = !walkStep; walkTimer = 0; }
-        drawSprite(isReacting ? HEAD_REACT : HEAD, walkStep ? LEGS_B : LEGS_A, dir === -1);
+        drawSprite(isReacting ? SLIME_REACT : (walkStep ? SLIME_SQUISH : SLIME_IDLE));
         canvas.style.left = petX + 'px';
         bubble.style.left = Math.min(petX, areaW - bubble.offsetWidth - 10) + 'px';
 
       } else if (mode === 'grabbed') {
-        drawSprite(HEAD_GRABBED, LEGS_DANGLE, false);
+        drawSprite(SLIME_GRABBED);
         bubble.style.left = Math.min(screenX, window.innerWidth - bubble.offsetWidth - 10) + 'px';
         bubble.style.bottom = '';
         bubble.style.top = Math.max(0, screenY - 32) + 'px';
@@ -535,29 +558,27 @@
         screenX += velX * dt;
         screenY += velY * dt;
 
-        // bounce off sides
         if (screenX < 0) { screenX = 0; velX = Math.abs(velX) * 0.5; }
         if (screenX + W > window.innerWidth) { screenX = window.innerWidth - W; velX = -Math.abs(velX) * 0.5; }
 
         canvas.style.left = screenX + 'px';
         canvas.style.top  = screenY + 'px';
-        drawSprite(HEAD_GRABBED, LEGS_DANGLE, velX < 0);
+        drawSprite(SLIME_GRABBED);
 
         if (screenY >= landY) {
           screenY = landY;
           canvas.style.top = screenY + 'px';
-          // restore bubble to normal
           bubble.style.position = '';
           bubble.style.top = '';
           bubble.style.bottom = '40px';
           const areaLeft = area.getBoundingClientRect().left;
           petX = Math.max(10, Math.min(screenX - areaLeft, areaW - W - 10));
           bubble.style.left = Math.min(petX, areaW - bubble.offsetWidth - 10) + 'px';
-          drawSprite(HEAD_HURT, LEGS_SPLAT, false);
+          drawSprite(SLIME_HURT);
           triggerHurt();
         }
       } else if (mode === 'hurt') {
-        drawSprite(HEAD_HURT, LEGS_SPLAT, false);
+        drawSprite(SLIME_HURT);
       }
 
       requestAnimationFrame(tick);
