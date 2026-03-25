@@ -463,9 +463,15 @@
     function emitPetState() {
       if (typeof socket === 'undefined' || !socket) return;
       const now = Date.now();
-      if (now - lastEmitT < 50) return; // max 20/sec
+      if (now - lastEmitT < 33) return; // ~30fps
       lastEmitT = now;
-      socket.emit('pet-state', { mode, petX, screenX, screenY, walkStep, dir, bubble: currentBubbleText });
+      // Normalize coordinates so they work on any screen size
+      socket.emit('pet-state', {
+        mode, walkStep, dir, bubble: currentBubbleText,
+        petX: petX / (area.offsetWidth || 1),          // 0-1 relative to pet area
+        normX: screenX / (window.innerWidth || 1),     // 0-1 relative to viewport
+        normY: screenY / (window.innerHeight || 1),
+      });
     }
 
     function getLandingY() {
@@ -554,49 +560,56 @@
       const areaW = area.offsetWidth;
       const landY = getLandingY();
 
-      if (mode === 'walk') {
-        petX += dir * SPEED * dt;
-        if (petX + W > areaW - 10) { dir = -1; petX = areaW - W - 10; }
-        if (petX < 10) { dir = 1; petX = 10; }
-        walkTimer += dt * 1000;
-        if (walkTimer > STEP_MS) { walkStep = !walkStep; walkTimer = 0; }
-        drawSprite(isReacting ? SLIME_REACT : (walkStep ? SLIME_SQUISH : SLIME_IDLE));
-        canvas.style.left = petX + 'px';
+      if (remoteControlled) {
+        // Just draw whatever state was received — no local physics
+        if      (mode === 'walk')    drawSprite(isReacting ? SLIME_REACT : (walkStep ? SLIME_SQUISH : SLIME_IDLE));
+        else if (mode === 'grabbed') drawSprite(SLIME_GRABBED);
+        else if (mode === 'falling') drawSprite(SLIME_GRABBED);
+        else if (mode === 'hurt')    drawSprite(SLIME_HURT);
+      } else {
+        if (mode === 'walk') {
+          petX += dir * SPEED * dt;
+          if (petX + W > areaW - 10) { dir = -1; petX = areaW - W - 10; }
+          if (petX < 10) { dir = 1; petX = 10; }
+          walkTimer += dt * 1000;
+          if (walkTimer > STEP_MS) { walkStep = !walkStep; walkTimer = 0; }
+          drawSprite(isReacting ? SLIME_REACT : (walkStep ? SLIME_SQUISH : SLIME_IDLE));
+          canvas.style.left = petX + 'px';
 
-      } else if (mode === 'grabbed') {
-        drawSprite(SLIME_GRABBED);
+        } else if (mode === 'grabbed') {
+          drawSprite(SLIME_GRABBED);
 
-      } else if (mode === 'falling') {
-        velY += GRAVITY * dt;
-        screenX += velX * dt;
-        screenY += velY * dt;
+        } else if (mode === 'falling') {
+          velY += GRAVITY * dt;
+          screenX += velX * dt;
+          screenY += velY * dt;
 
-        if (screenX < 0) { screenX = 0; velX = Math.abs(velX) * 0.5; }
-        if (screenX + W > window.innerWidth) { screenX = window.innerWidth - W; velX = -Math.abs(velX) * 0.5; }
+          if (screenX < 0) { screenX = 0; velX = Math.abs(velX) * 0.5; }
+          if (screenX + W > window.innerWidth) { screenX = window.innerWidth - W; velX = -Math.abs(velX) * 0.5; }
 
-        canvas.style.left = screenX + 'px';
-        canvas.style.top  = screenY + 'px';
-        drawSprite(SLIME_GRABBED);
+          canvas.style.left = screenX + 'px';
+          canvas.style.top  = screenY + 'px';
+          drawSprite(SLIME_GRABBED);
 
-        if (screenY >= landY) {
-          screenY = landY;
-          canvas.style.top = screenY + 'px';
-          const areaLeft = area.getBoundingClientRect().left;
-          petX = Math.max(10, Math.min(screenX - areaLeft, areaW - W - 10));
+          if (screenY >= landY) {
+            screenY = landY;
+            canvas.style.top = screenY + 'px';
+            const areaLeft = area.getBoundingClientRect().left;
+            petX = Math.max(10, Math.min(screenX - areaLeft, areaW - W - 10));
+            drawSprite(SLIME_HURT);
+            triggerHurt();
+          }
+        } else if (mode === 'hurt') {
           drawSprite(SLIME_HURT);
-          triggerHurt();
         }
-      } else if (mode === 'hurt') {
-        drawSprite(SLIME_HURT);
+
+        emitPetState();
       }
 
       // Always pin bubble just above the canvas head
       const cr = canvas.getBoundingClientRect();
       bubble.style.left = Math.min(cr.left, window.innerWidth - bubble.offsetWidth - 8) + 'px';
       bubble.style.top  = Math.max(4, cr.top - bubble.offsetHeight - 6) + 'px';
-
-      // Sync to others if I'm in control
-      if (!remoteControlled) emitPetState();
 
       requestAnimationFrame(tick);
     }
@@ -607,11 +620,13 @@
       if (mode === 'grabbed') return; // I'm currently dragging, ignore
       remoteControlled = true;
       mode = state.mode;
-      petX = state.petX;
-      screenX = state.screenX;
-      screenY = state.screenY;
       walkStep = state.walkStep;
       dir = state.dir;
+
+      // Convert normalized coords back to local pixels
+      petX    = state.petX  * area.offsetWidth;
+      screenX = state.normX * window.innerWidth;
+      screenY = state.normY * window.innerHeight;
 
       // Apply canvas position
       if (mode === 'walk' || mode === 'hurt') {
