@@ -126,6 +126,11 @@ io.on('connection', (socket) => {
     const fresh = db.prepare('SELECT display_name FROM users WHERE id = ?').get(socket.userId);
     if (fresh) socket.displayName = fresh.display_name;
   });
+
+  // Broadcast pet state to everyone else
+  socket.on('pet-state', (data) => {
+    socket.broadcast.emit('pet-state', data);
+  });
 });
 
 const PORT = process.env.PORT || 3000;

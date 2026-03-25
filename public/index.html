@@ -272,6 +272,9 @@
       appendMessage(msg.display_name, msg.text, msg.created_at, true);
       if (window.petReact) window.petReact(msg.text);
     });
+    socket.on('pet-state', (state) => {
+      if (window.onPetState) window.onPetState(state);
+    });
     socket.on('connect_error', () => doLogout());
   }
 
@@ -452,6 +455,19 @@
     let grabOffX = 0, grabOffY = 0;
     let prevDragX = 0, prevDragY = 0, prevDragT = 0;
 
+    // Remote control
+    let remoteControlled = false;
+    let lastEmitT = 0;
+    let currentBubbleText = '';
+
+    function emitPetState() {
+      if (typeof socket === 'undefined' || !socket) return;
+      const now = Date.now();
+      if (now - lastEmitT < 50) return; // max 20/sec
+      lastEmitT = now;
+      socket.emit('pet-state', { mode, petX, screenX, screenY, walkStep, dir, bubble: currentBubbleText });
+    }
+
     function getLandingY() {
       const r = area.getBoundingClientRect();
       return r.bottom - H - 4;
@@ -459,6 +475,7 @@
 
     function startGrab(cx, cy) {
       if (mode === 'hurt') return;
+      remoteControlled = false;
       mode = 'grabbed';
       canvas.style.position = 'fixed';
       canvas.style.cursor = 'grabbing';
@@ -502,10 +519,12 @@
 
     function showBubble(text, autoClear=true) {
       if (reactTimer) clearTimeout(reactTimer);
+      currentBubbleText = text;
       bubble.textContent = text;
       bubble.style.opacity = '1';
       if (autoClear) {
         reactTimer = setTimeout(() => {
+          currentBubbleText = '';
           bubble.style.opacity = '0';
           setTimeout(() => { if (mode==='walk') isReacting = false; }, 300);
         }, 2500);
@@ -576,9 +595,47 @@
       bubble.style.left = Math.min(cr.left, window.innerWidth - bubble.offsetWidth - 8) + 'px';
       bubble.style.top  = Math.max(4, cr.top - bubble.offsetHeight - 6) + 'px';
 
+      // Sync to others if I'm in control
+      if (!remoteControlled) emitPetState();
+
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
+
+    // Apply state received from another user
+    window.onPetState = function(state) {
+      if (mode === 'grabbed') return; // I'm currently dragging, ignore
+      remoteControlled = true;
+      mode = state.mode;
+      petX = state.petX;
+      screenX = state.screenX;
+      screenY = state.screenY;
+      walkStep = state.walkStep;
+      dir = state.dir;
+
+      // Apply canvas position
+      if (mode === 'walk' || mode === 'hurt') {
+        canvas.style.position = 'absolute';
+        canvas.style.top = '';
+        canvas.style.zIndex = '';
+        canvas.style.left = petX + 'px';
+      } else {
+        canvas.style.position = 'fixed';
+        canvas.style.zIndex = '999';
+        canvas.style.left = screenX + 'px';
+        canvas.style.top  = screenY + 'px';
+      }
+
+      // Sync bubble
+      if (state.bubble && state.bubble !== currentBubbleText) {
+        currentBubbleText = state.bubble;
+        bubble.textContent = state.bubble;
+        bubble.style.opacity = '1';
+      } else if (!state.bubble && currentBubbleText) {
+        currentBubbleText = '';
+        bubble.style.opacity = '0';
+      }
+    };
 
     const reactions = {
       laugh:   ['hehe~!','*giggles*','haha xD','lol!!'],
